@@ -1,0 +1,50 @@
+# AI Werewolf — default configuration (safe to commit)
+# Secrets: copy Config/secrets.yaml.example → Config/secrets.yaml (gitignored)
+
+board:
+  players: 12
+  wolves: 4
+  gods: [seer, witch, hunter, idiot]
+  villagers: 4
+
+game:
+  max_rounds: 30
+  sheriff_vote_weight: 1.5
+  wolf_kill:
+    tie_allowed: false
+    empty_allowed: true
+    max_negotiation_rounds: 10
+
+agents:
+  default_timeout_sec: 120
+  response_jitter_ms: [0, 500]
+
+llm:
+  provider: deepseek
+  model: deepseek-chat
+  base_url: https://api.deepseek.com/v1
+  temperature: 0.85
+  top_p: 0.92
+  frequency_penalty: 0.35
+  presence_penalty: 0.1
+  temperature_jitter: 0.18
+  top_p_jitter: 0.08
+  frequency_penalty_jitter: 0.2
+  api_key: ""
+  model_pool:
+    - deepseek-chat
+    - deepseek-reasoner
+    - deepseek-v4-flash
+    - deepseek-v4-pro
+  assign_models_per_player: true
+  diversify_within_camp: true
+
+prompts:
+  rules_file: rules.md
+  game_guide_file: game_guide.md
+  inject_full_game_guide: false
+  inject_role_scoped_guide: true
+
+logging:
+  format: json
+  output_dir: logs/

@@ -1,0 +1,72 @@
+"""Game engine — state, rules, setup."""
+
+from aiwerewolf.engine.day import (
+    cast_day_vote,
+    cast_sheriff_vote,
+    idiot_reveal_on_vote,
+    nominate_for_sheriff,
+    resolve_day_vote,
+    resolve_hunter_shoot,
+    resolve_pk_vote,
+    resolve_sheriff_election,
+    resolve_sheriff_pk,
+    transfer_sheriff_badge,
+    withdraw_sheriff_candidacy,
+    wolf_self_destruct,
+)
+from aiwerewolf.engine.night import (
+    check_hunter_status,
+    collect_death_announcements,
+    confirm_idiot,
+    resolve_night,
+    resolve_seer_check,
+    resolve_witch,
+    resolve_wolf_kill,
+)
+from aiwerewolf.engine.rules import (
+    apply_win_if_any,
+    check_max_rounds,
+    check_win,
+    eliminate_player,
+    next_phase,
+    role_camp,
+    validate_phase_advance,
+)
+from aiwerewolf.engine.setup import assign_roles, create_game, standard_role_deck
+from aiwerewolf.engine.state import GameState, PlayerState, VoteRecord, WinResult
+
+__all__ = [
+    "GameState",
+    "PlayerState",
+    "VoteRecord",
+    "WinResult",
+    "apply_win_if_any",
+    "assign_roles",
+    "cast_day_vote",
+    "cast_sheriff_vote",
+    "check_hunter_status",
+    "check_max_rounds",
+    "check_win",
+    "collect_death_announcements",
+    "confirm_idiot",
+    "create_game",
+    "eliminate_player",
+    "idiot_reveal_on_vote",
+    "next_phase",
+    "nominate_for_sheriff",
+    "resolve_day_vote",
+    "resolve_hunter_shoot",
+    "resolve_night",
+    "resolve_pk_vote",
+    "resolve_seer_check",
+    "resolve_sheriff_election",
+    "resolve_sheriff_pk",
+    "resolve_witch",
+    "resolve_wolf_kill",
+    "role_camp",
+    "standard_role_deck",
+    "transfer_sheriff_badge",
+    "validate_phase_advance",
+    "withdraw_sheriff_candidacy",
+    "wolf_self_destruct",
+]

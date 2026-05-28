@@ -1,0 +1,32 @@
+# Secrets — never commit (any path / casing)
+**/secrets.yaml
+!**/secrets.yaml.example
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Test / tooling
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+frontend/tsconfig.tsbuildinfo
+
+# Logs & runtime
+logs/
+*.log
+
+# IDE
+.idea/
+.vscode/
+
+# Node
+frontend/node_modules/
+frontend/dist/
