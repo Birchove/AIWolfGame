@@ -7,6 +7,7 @@ name = "aiwerewolf"
 version = "0.1.0"
 description = "AI Werewolf (狼人杀) multi-agent game engine"
 readme = "CLAUDE.md"
+license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.0",

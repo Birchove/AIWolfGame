@@ -10,6 +10,7 @@
 ![Tests](https://img.shields.io/badge/测试-142%20passed-brightgreen)
 ![板子](https://img.shields.io/badge/板子-12人预女猎白-orange)
 ![LLM](https://img.shields.io/badge/LLM-DeepSeek兼容API-0066FF)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 </div>
 
