@@ -57,6 +57,10 @@ class PlayerView:
     is_sheriff_candidate: bool = False
     is_sheriff_withdrawn: bool = False
     is_sheriff_voter: bool = False
+    must_set_speech_order: bool = False
+    speech_order_pending: bool = False
+    must_transfer_sheriff_badge: bool = False
+    may_give_last_words: bool = False
     persona: str = ""
     public_speeches: tuple[SpeechRecord, ...] = ()
     wolf_team_speeches: tuple[SpeechRecord, ...] = ()

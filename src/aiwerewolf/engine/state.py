@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from schema.enums import Camp, Phase, Role, WinReason
+from schema.enums import Camp, DeathCause, Phase, Role, WinReason
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +76,10 @@ class GameState:
     seer_checks: tuple[SeerCheckResult, ...] = ()
     hunter_can_shoot: bool = False
     death_announcements: tuple[int, ...] = ()
+    pending_death_announcements: tuple[int, ...] = ()
+    death_records: tuple[tuple[int, DeathCause, int], ...] = ()
+    sheriff_badge_pending_from: int | None = None
+    sheriff_elected_once: bool = False
     # Day phase (Slice 2)
     sheriff_candidates: tuple[int, ...] = ()
     sheriff_withdrawn: tuple[int, ...] = ()
@@ -88,6 +92,10 @@ class GameState:
     pk_candidates: tuple[int, ...] = ()
     wolf_negotiation_round: int = 0
     wolf_negotiation_votes: tuple[tuple[int, int | None], ...] = ()
+    speech_order_pending: bool = False
+    speech_order_side: str = "right"
+    speech_first_speaker_id: int | None = None
+    speech_round_order: tuple[int, ...] = ()
     personas: tuple[tuple[int, str], ...] = ()
     speech_log: tuple[SpeechRecord, ...] = ()
 

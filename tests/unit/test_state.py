@@ -44,3 +44,4 @@ def test_eliminate_player_clears_sheriff() -> None:
     new_state = eliminate_player(state, 5)
     assert not new_state.player(5).alive
     assert new_state.sheriff_id is None
+    assert new_state.sheriff_badge_pending_from == 5

@@ -59,7 +59,7 @@ def resolve_sheriff_election(state: GameState) -> GameState:
         )
     if winner is None:
         return cleared
-    return _assign_sheriff(cleared, winner)
+    return _assign_sheriff(cleared, winner, via_election=True)
 
 
 def resolve_sheriff_pk(state: GameState) -> GameState:
@@ -67,7 +67,7 @@ def resolve_sheriff_pk(state: GameState) -> GameState:
     cleared = replace(state, day_votes=(), pk_candidates=(), sheriff_election_retry=False)
     if tied or winner is None:
         return replace(cleared, sheriff_id=None, sheriff_election_forbidden=False)
-    return _assign_sheriff(cleared, winner)
+    return _assign_sheriff(cleared, winner, via_election=True)
 
 
 def cast_day_vote(state: GameState, voter_id: int, target_id: int | None) -> GameState:
@@ -76,6 +76,12 @@ def cast_day_vote(state: GameState, voter_id: int, target_id: int | None) -> Gam
         raise ValueError("dead player cannot vote")
     if voter.in_soul_state:
         raise ValueError("soul-state idiot cannot vote")
+    if target_id is not None:
+        target = state.player(target_id)
+        if not target.alive:
+            raise ValueError("cannot vote for dead player")
+        if target.in_soul_state:
+            raise ValueError("cannot vote for soul-state idiot")
     weight = 1.5 if voter.is_sheriff else 1.0
     record = VoteRecord(voter_id=voter_id, target_id=target_id, weight=weight)
     return replace(state, day_votes=state.day_votes + (record,))
@@ -172,12 +178,19 @@ def resolve_hunter_shoot(
 
 
 def transfer_sheriff_badge(state: GameState, from_id: int, to_id: int) -> GameState:
-    if state.sheriff_id != from_id:
-        raise ValueError("from_id is not current sheriff")
-    target = state.player(to_id)
-    if not target.alive:
-        raise ValueError("badge recipient must be alive")
-    return _assign_sheriff(_clear_sheriff_flag(state, from_id), to_id)
+    if state.sheriff_id != from_id and state.sheriff_badge_pending_from != from_id:
+        raise ValueError("from_id is not current or pending sheriff")
+    from aiwerewolf.engine.interaction import can_receive_sheriff_badge
+
+    if not can_receive_sheriff_badge(state, to_id):
+        raise ValueError("badge recipient must be a living non-soul player")
+    if to_id == from_id:
+        raise ValueError("cannot transfer badge to self")
+    cleared = _clear_sheriff_flag(state, from_id)
+    return replace(
+        _assign_sheriff(cleared, to_id),
+        sheriff_badge_pending_from=None,
+    )
 
 
 def _resolve_elimination(state: GameState, player_id: int) -> GameState:
@@ -192,16 +205,23 @@ def _resolve_elimination(state: GameState, player_id: int) -> GameState:
     return s
 
 
-def _assign_sheriff(state: GameState, player_id: int) -> GameState:
+def _assign_sheriff(
+    state: GameState, player_id: int, *, via_election: bool = False
+) -> GameState:
     new_players = tuple(
         replace(p, is_sheriff=(p.player_id == player_id)) for p in state.players
     )
+    kwargs: dict = {}
+    if via_election:
+        kwargs["sheriff_elected_once"] = True
     return replace(
         state,
         players=new_players,
         sheriff_id=player_id,
         sheriff_candidates=(),
         sheriff_election_step="nominate",
+        sheriff_badge_pending_from=None,
+        **kwargs,
     )
 
 

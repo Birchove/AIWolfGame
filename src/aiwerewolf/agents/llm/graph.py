@@ -84,7 +84,13 @@ def _fallback(state: AgentGraphState) -> AgentGraphState:
         return state
     view = state["view"]
     action = PassAction()
-    if view.own_role == Role.WOLF and view.phase == Phase.NIGHT_WOLF:
+    if view.must_set_speech_order:
+        from schema.agent import SpeechOrderAction
+
+        living = list(view.living_player_ids)
+        first = living[0] if living else view.player_id
+        action = SpeechOrderAction(side="right", first_speaker_id=first)
+    elif view.own_role == Role.WOLF and view.phase == Phase.NIGHT_WOLF:
         candidates = [
             pid
             for pid in view.living_player_ids

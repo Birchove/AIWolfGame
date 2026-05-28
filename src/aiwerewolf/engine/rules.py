@@ -86,26 +86,46 @@ def eliminate_player(
         raise ValueError("cannot poison soul-state idiot")
 
     new_sheriff_id = state.sheriff_id
+    pending_transfer = state.sheriff_badge_pending_from
+    if state.sheriff_id == player_id:
+        new_sheriff_id = None
+        pending_transfer = player_id
+
+    death_records = state.death_records + ((player_id, cause, state.round_number),)
+    pending_ann = state.pending_death_announcements
+    if player_id not in pending_ann:
+        pending_ann = pending_ann + (player_id,)
+
     new_players: list[PlayerState] = []
     for p in state.players:
         if p.player_id == player_id:
             new_players.append(
                 replace(p, alive=False, is_sheriff=False, in_soul_state=False)
             )
-            if new_sheriff_id == player_id:
-                new_sheriff_id = None
         else:
             new_players.append(p)
-    return replace(state, players=tuple(new_players), sheriff_id=new_sheriff_id)
+    return replace(
+        state,
+        players=tuple(new_players),
+        sheriff_id=new_sheriff_id,
+        sheriff_badge_pending_from=pending_transfer,
+        death_records=death_records,
+        pending_death_announcements=pending_ann,
+    )
+
+
+def _need_sheriff_election(state: GameState) -> bool:
+    if state.sheriff_election_forbidden or state.sheriff_id is not None:
+        return False
+    if state.sheriff_badge_pending_from is not None:
+        return False
+    if state.sheriff_elected_once and not state.sheriff_election_retry:
+        return False
+    return state.is_first_day or state.sheriff_election_retry
 
 
 def _day_phases(state: GameState) -> tuple[Phase, ...]:
-    need_sheriff = (
-        not state.sheriff_election_forbidden
-        and state.sheriff_id is None
-        and (state.is_first_day or state.sheriff_election_retry)
-    )
-    if need_sheriff:
+    if _need_sheriff_election(state):
         return DAY_PHASES_FIRST
     if state.is_first_day:
         return (Phase.DAY_ANNOUNCE, Phase.DAY_SPEECH, Phase.DAY_VOTE)

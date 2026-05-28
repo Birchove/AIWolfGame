@@ -44,6 +44,8 @@ def state_from_roles(
     seer_checks: tuple[SeerCheckResult, ...] = (),
     hunter_can_shoot: bool = False,
     death_announcements: tuple[int, ...] = (),
+    pending_death_announcements: tuple[int, ...] = (),
+    sheriff_elected_once: bool = False,
     self_destruct_during_election: int = 0,
     sheriff_election_retry: bool = False,
 ) -> GameState:
@@ -59,6 +61,8 @@ def state_from_roles(
         seer_checks=seer_checks,
         hunter_can_shoot=hunter_can_shoot,
         death_announcements=death_announcements,
+        pending_death_announcements=pending_death_announcements or death_announcements,
+        sheriff_elected_once=sheriff_elected_once,
         self_destruct_during_election=self_destruct_during_election,
         sheriff_election_retry=sheriff_election_retry,
     )

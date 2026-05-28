@@ -5,14 +5,21 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
-from schema.agent import AgentTurnOutput, HunterShootAction, SelfDestructAction, WitchPoisonAction, WitchSaveAction, WolfKillAction
+from schema.agent import AgentTurnOutput, HunterShootAction, SelfDestructAction, SheriffTransferAction, SpeechOrderAction, WitchPoisonAction, WitchSaveAction, WolfKillAction
 from schema.config import AppConfig
 from schema.enums import Camp, Phase, Role, WinReason
 
 if TYPE_CHECKING:
     from aiwerewolf.agents.base import Agent
     from aiwerewolf.logging.recorder import Recorder
-from aiwerewolf.engine.day import resolve_day_vote, resolve_pk_vote, resolve_sheriff_election, resolve_sheriff_pk
+from aiwerewolf.engine.interaction import has_last_words, may_act_in_phase
+from aiwerewolf.engine.day import (
+    resolve_day_vote,
+    resolve_pk_vote,
+    resolve_sheriff_election,
+    resolve_sheriff_pk,
+    transfer_sheriff_badge,
+)
 from aiwerewolf.engine.night import (
     check_hunter_status,
     collect_death_announcements,
@@ -24,11 +31,12 @@ from aiwerewolf.engine.rules import apply_win_if_any, next_phase
 from aiwerewolf.engine.setup import create_game
 from aiwerewolf.engine.state import GameState
 from aiwerewolf.engine.speech import append_speech
+from aiwerewolf.engine.speech_order import day_speech_order
 from aiwerewolf.protocol.dispatch import apply_action
 from aiwerewolf.protocol.visibility import Visibility
 
 _MAX_STEPS = 5000
-_WOLF_NEGOTIATION_ROUNDS = 5
+_WOLF_NEGOTIATION_ROUNDS = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,7 +112,9 @@ class GameLoop:
             return self._single_role_phase(state, Role.IDIOT)
         if phase == Phase.DAY_SHERIFF:
             return self._day_sheriff(state)
-        if phase in {Phase.DAY_ANNOUNCE, Phase.DAY_SPEECH}:
+        if phase == Phase.DAY_ANNOUNCE:
+            return self._day_announce(state)
+        if phase == Phase.DAY_SPEECH:
             return self._day_speeches(state)
         if phase == Phase.DAY_VOTE:
             return self._day_vote(state)
@@ -392,8 +402,112 @@ class GameLoop:
         elif isinstance(output.action, PassAction):
             self._recorder.record_sheriff_nominate(state, pid, running=False)
 
+    def _day_announce(self, state: GameState) -> GameState:
+        """Overnight deaths: sheriff badge transfer, then last words only."""
+        pending = state.sheriff_badge_pending_from
+        if pending is not None and not has_last_words(state, pending):
+            state = self._sheriff_badge_transfer_turn(state)
+
+        for pid in sorted(state.death_announcements):
+            if not has_last_words(state, pid):
+                continue
+            if not may_act_in_phase(state, pid, Phase.DAY_ANNOUNCE):
+                continue
+            state, output = self._act(state, pid)
+            state = self._try_apply(state, output)
+            state = self._apply_sheriff_transfer_from_output(state, output)
+            if state.self_destruct_today or state.phase == Phase.GAME_OVER:
+                return (
+                    self._finish_phase(state)
+                    if state.phase != Phase.GAME_OVER
+                    else state
+                )
+
+        if state.sheriff_badge_pending_from is not None:
+            state = self._sheriff_badge_transfer_turn(state)
+
+        state = replace(state, pending_death_announcements=())
+        return self._finish_phase(state)
+
+    def _sheriff_badge_transfer_turn(self, state: GameState) -> GameState:
+        pending = state.sheriff_badge_pending_from
+        if pending is None:
+            return state
+        state, output = self._act(state, pending, count_as_speech=False)
+        state = self._apply_sheriff_transfer_from_output(state, output)
+        if state.sheriff_badge_pending_from is not None:
+            living = [p.player_id for p in state.living_players()]
+            if living:
+                try:
+                    state = transfer_sheriff_badge(state, pending, living[0])
+                except ValueError:
+                    state = replace(state, sheriff_badge_pending_from=None)
+            else:
+                state = replace(state, sheriff_badge_pending_from=None)
+        if self._recorder is not None and state.sheriff_id is not None:
+            self._recorder.record_sheriff_badge_transferred(state, from_id=pending)
+        return state
+
+    def _apply_sheriff_transfer_from_output(
+        self, state: GameState, output: AgentTurnOutput
+    ) -> GameState:
+        if isinstance(output.action, SheriffTransferAction):
+            pending = state.sheriff_badge_pending_from
+            if pending is not None:
+                try:
+                    return transfer_sheriff_badge(
+                        state, pending, output.action.transfer_to
+                    )
+                except ValueError:
+                    return state
+        if isinstance(output.action, SelfDestructAction):
+            if output.action.transfer_to is not None and state.sheriff_badge_pending_from:
+                try:
+                    return transfer_sheriff_badge(
+                        state,
+                        state.sheriff_badge_pending_from,
+                        output.action.transfer_to,
+                    )
+                except ValueError:
+                    return state
+        return state
+
     def _day_speeches(self, state: GameState) -> GameState:
-        for pid in self._speech_order(state):
+        """Sheriff sets order (not counted as speech), then one round in that order."""
+        living = set(self._living_ids(state))
+        pending = state.sheriff_id is not None and state.sheriff_id in living
+        state = replace(
+            state,
+            speech_order_pending=pending,
+            speech_order_side="right",
+            speech_first_speaker_id=None,
+            speech_round_order=(),
+        )
+        if pending:
+            assert state.sheriff_id is not None
+            state, output = self._act(state, state.sheriff_id, count_as_speech=False)
+            state = self._try_apply(state, output)
+            if state.speech_order_pending:
+                state = replace(state, speech_order_pending=False)
+            if state.self_destruct_today or state.phase == Phase.GAME_OVER:
+                return (
+                    self._finish_phase(state)
+                    if state.phase != Phase.GAME_OVER
+                    else state
+                )
+
+        order = day_speech_order(
+            state,
+            side=state.speech_order_side,
+            first_speaker_id=state.speech_first_speaker_id,
+        )
+        state = replace(state, speech_round_order=tuple(order))
+        if self._recorder is not None and order:
+            self._recorder.record_speech_order_set(state, order=order)
+
+        for pid in order:
+            if not may_act_in_phase(state, pid, Phase.DAY_SPEECH):
+                continue
             state, output = self._act(state, pid)
             state = self._try_apply(state, output)
             if state.self_destruct_today or state.phase == Phase.GAME_OVER:
@@ -402,6 +516,12 @@ class GameLoop:
                     if state.phase != Phase.GAME_OVER
                     else state
                 )
+        state = replace(
+            state,
+            speech_order_pending=False,
+            speech_round_order=(),
+            speech_first_speaker_id=None,
+        )
         return self._finish_phase(state)
 
     def _day_vote(self, state: GameState) -> GameState:
@@ -424,7 +544,16 @@ class GameLoop:
 
     def _day_pk(self, state: GameState) -> GameState:
         pk_set = set(state.pk_candidates)
-        for pid in self._speech_order(state):
+        base_order = (
+            list(state.speech_round_order)
+            if state.speech_round_order
+            else day_speech_order(
+                state,
+                side=state.speech_order_side,
+                first_speaker_id=state.speech_first_speaker_id,
+            )
+        )
+        for pid in base_order:
             if pid not in pk_set:
                 continue
             state, output = self._act(state, pid)
@@ -508,12 +637,21 @@ class GameLoop:
             state = apply_win_if_any(state, max_rounds=self._max_rounds)
         return state
 
-    def _act(self, state: GameState, player_id: int) -> tuple[GameState, AgentTurnOutput]:
+    def _act(
+        self,
+        state: GameState,
+        player_id: int,
+        *,
+        count_as_speech: bool = True,
+    ) -> tuple[GameState, AgentTurnOutput]:
         view = Visibility.for_player(state, player_id)
         output = self._agents[player_id].act(view)
-        state = append_speech(state, output)
+        if count_as_speech and not isinstance(output.action, SpeechOrderAction):
+            state = append_speech(state, output)
         if self._recorder is not None:
-            self._recorder.record_agent_turn(state, output)
+            self._recorder.record_agent_turn(
+                state, output, count_as_speech=count_as_speech
+            )
         return state, output
 
     def _try_apply(self, state: GameState, output: AgentTurnOutput) -> GameState:
@@ -544,15 +682,7 @@ class GameLoop:
 
     def _day_voters(self, state: GameState) -> list[int]:
         return sorted(
-            p.player_id for p in state.living_players() if not p.in_soul_state
+            p.player_id
+            for p in state.living_players()
+            if not p.in_soul_state and may_act_in_phase(state, p.player_id, state.phase)
         )
-
-    def _speech_order(self, state: GameState) -> list[int]:
-        ids = self._living_ids(state)
-        if not ids:
-            return []
-        start = state.sheriff_id or 1
-        if start not in ids:
-            start = ids[0]
-        idx = ids.index(start)
-        return ids[idx:] + ids[:idx]

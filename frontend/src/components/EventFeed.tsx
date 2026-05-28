@@ -14,6 +14,9 @@ const TYPE_LABEL: Record<string, string> = {
   sheriff_vote_result: "警长票型",
   sheriff_elected: "警长",
   sheriff_proclaimed: "警长公示",
+  sheriff_badge_transferred: "移交警徽",
+  speech_order_pick: "警长定序",
+  speech_order_set: "发言顺序",
   self_destruct: "自爆",
   hunter_shoot: "猎人",
   idiot_reveal: "白痴",
@@ -58,6 +61,12 @@ function formatEvent(e: GameEvent): string {
     case "sheriff_elected":
     case "sheriff_proclaimed":
       return (p.message as string) || `P${p.player_id} 当选警长`;
+    case "sheriff_badge_transferred":
+      return (p.message as string) || `警徽 P${p.from_id} → P${p.to_id}`;
+    case "speech_order_pick":
+      return (p.message as string) || "警长指定发言顺序";
+    case "speech_order_set":
+      return (p.message as string) || `顺序 ${(p.order as number[])?.join("→")}`;
     case "self_destruct":
       return `P${p.player_id} 自爆`;
     case "hunter_shoot":

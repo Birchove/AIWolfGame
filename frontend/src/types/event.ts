@@ -27,6 +27,7 @@ export interface SpectatorState {
   sheriffCandidates: Set<number>;
   sheriffWithdrawn: Set<number>;
   sheriffElectionStep: string | null;
+  speechOrder: number[];
   phase: string | null;
   round: number | null;
   speeches: Record<number, string>;
@@ -52,6 +53,7 @@ export function initialSpectatorState(): SpectatorState {
     sheriffCandidates: new Set(),
     sheriffWithdrawn: new Set(),
     sheriffElectionStep: null,
+    speechOrder: [],
     phase: null,
     round: null,
     speeches: {},

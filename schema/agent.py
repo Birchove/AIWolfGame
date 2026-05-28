@@ -11,6 +11,12 @@ class SpeechAction(BaseModel):
     demeanor: str = ""
 
 
+class SpeechOrderAction(BaseModel):
+    type: Literal["speech_order"] = "speech_order"
+    side: Literal["left", "right"] = "right"  # 从 first_speaker 起逆时针/顺时针
+    first_speaker_id: int | None = None  # 警长指定首位发言者（须存活）
+
+
 class VoteAction(BaseModel):
     type: Literal["vote"] = "vote"
     target_id: int | None = None  # None = abstain
@@ -65,8 +71,14 @@ class IdiotRevealAction(BaseModel):
     reveal: bool = True
 
 
+class SheriffTransferAction(BaseModel):
+    type: Literal["sheriff_transfer"] = "sheriff_transfer"
+    transfer_to: int
+
+
 ActionPayload = (
     SpeechAction
+    | SpeechOrderAction
     | VoteAction
     | WolfKillAction
     | SelfDestructAction
@@ -75,6 +87,7 @@ ActionPayload = (
     | WitchPoisonAction
     | SeerCheckAction
     | IdiotRevealAction
+    | SheriffTransferAction
     | SheriffRunAction
     | SheriffWithdrawAction
     | PassAction

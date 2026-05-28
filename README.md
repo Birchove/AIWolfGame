@@ -218,7 +218,7 @@ cd frontend
 npm run dev
 ```
 
-Open **http://localhost:5173** (proxies API/WebSocket to port 8000).
+Open **http://localhost:5173**  (proxies API/WebSocket to port 8000).
 
 **CLI — batch games (no browser)**
 

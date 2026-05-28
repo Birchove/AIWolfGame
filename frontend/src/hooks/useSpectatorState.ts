@@ -13,6 +13,7 @@ function applyEvent(state: SpectatorState, event: GameEvent): SpectatorState {
     idiotRevealed: new Set(state.idiotRevealed),
     sheriffCandidates: new Set(state.sheriffCandidates),
     sheriffWithdrawn: new Set(state.sheriffWithdrawn),
+    speechOrder: [...state.speechOrder],
     events: [...state.events, event],
     phase: event.phase ?? state.phase,
     round: event.round ?? state.round,
@@ -33,6 +34,9 @@ function applyEvent(state: SpectatorState, event: GameEvent): SpectatorState {
     }
     case "phase_change":
       next.phase = (p.phase as string) ?? next.phase;
+      if (next.phase !== "day_speech") {
+        next.speechOrder = [];
+      }
       if (next.phase === "day_sheriff" && next.sheriffElectionStep == null) {
         next.sheriffElectionStep = "nominate";
         next.sheriffCandidates = new Set();
@@ -102,6 +106,22 @@ function applyEvent(state: SpectatorState, event: GameEvent): SpectatorState {
     case "sheriff_elected":
     case "sheriff_proclaimed":
       next.sheriffId = (p.player_id as number) ?? event.player_id ?? null;
+      next.sheriffCandidates = new Set();
+      next.sheriffWithdrawn = new Set();
+      next.sheriffElectionStep = null;
+      break;
+    case "sheriff_badge_transferred":
+      next.sheriffId = (p.to_id as number) ?? event.player_id ?? null;
+      next.sheriffCandidates = new Set();
+      next.sheriffWithdrawn = new Set();
+      next.sheriffElectionStep = null;
+      break;
+    case "speech_order_set": {
+      const order = (p.order as number[]) ?? [];
+      next.speechOrder = order;
+      break;
+    }
+    case "speech_order_pick":
       break;
     case "self_destruct": {
       const pid = (p.player_id as number) ?? event.player_id;

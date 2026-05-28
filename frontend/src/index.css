@@ -283,6 +283,14 @@ body {
   font-size: 0.7rem;
 }
 
+.speech-order-banner {
+  margin-top: 0.25rem;
+  font-size: 0.65rem;
+  color: #c9d8a8;
+  max-width: 11rem;
+  line-height: 1.25;
+}
+
 .sheriff-banner {
   margin-top: 0.35rem;
   color: #d4af37;

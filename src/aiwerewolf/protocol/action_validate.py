@@ -6,6 +6,8 @@ from schema.agent import (
     ActionPayload,
     HunterShootAction,
     SeerCheckAction,
+    SpeechOrderAction,
+    SheriffTransferAction,
     VoteAction,
     WitchPoisonAction,
     WolfKillAction,
@@ -29,9 +31,21 @@ def validate_action_for_view(view: PlayerView, action: ActionPayload) -> tuple[b
         action,
         hunter_can_shoot=view.hunter_can_shoot,
         sheriff_election_step=view.sheriff_election_step,
+        player_id=view.player_id,
+        state_sheriff_id=view.sheriff_id,
+        speech_order_pending=view.speech_order_pending,
+        sheriff_badge_pending_from=(
+            view.player_id if view.must_transfer_sheriff_badge else None
+        ),
     )
     if not ok:
         return False, reason
+
+    if not view.is_alive and not view.in_soul_state:
+        if view.must_transfer_sheriff_badge or view.may_give_last_words:
+            pass
+        else:
+            return False, "dead player cannot act"
 
     living = set(view.living_player_ids)
 
@@ -58,6 +72,19 @@ def validate_action_for_view(view: PlayerView, action: ActionPayload) -> tuple[b
             return False, f"seer_check target {action.target_id} is not alive"
         if action.target_id == view.player_id:
             return False, "seer cannot check self"
+        return True, ""
+
+    if isinstance(action, SpeechOrderAction):
+        if action.first_speaker_id is not None:
+            if action.first_speaker_id not in living:
+                return False, f"first_speaker_id {action.first_speaker_id} is not alive"
+        return True, ""
+
+    if isinstance(action, SheriffTransferAction):
+        if action.transfer_to not in living:
+            return False, f"transfer_to {action.transfer_to} is not alive"
+        if action.transfer_to == view.player_id:
+            return False, "cannot transfer badge to self"
         return True, ""
 
     if isinstance(action, VoteAction):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from schema.enums import Phase, Role
 
+from aiwerewolf.engine.interaction import has_last_words, may_act_in_phase
 from aiwerewolf.engine.state import GameState
 from aiwerewolf.protocol.views import PlayerView, PublicEventSummary, SeerCheckResult
 
@@ -99,6 +100,20 @@ class Visibility:
             is_sheriff_candidate=is_sheriff_candidate,
             is_sheriff_withdrawn=is_sheriff_withdrawn,
             is_sheriff_voter=is_sheriff_voter,
+            must_set_speech_order=(
+                state.phase == Phase.DAY_SPEECH
+                and state.speech_order_pending
+                and state.sheriff_id == player_id
+                and player.alive
+            ),
+            speech_order_pending=state.speech_order_pending,
+            must_transfer_sheriff_badge=(
+                state.sheriff_badge_pending_from == player_id
+            ),
+            may_give_last_words=(
+                state.phase == Phase.DAY_ANNOUNCE
+                and has_last_words(state, player_id)
+            ),
         )
 
 

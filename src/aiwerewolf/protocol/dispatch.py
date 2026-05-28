@@ -9,8 +9,10 @@ from schema.agent import (
     SeerCheckAction,
     SelfDestructAction,
     SheriffRunAction,
+    SheriffTransferAction,
     SheriffWithdrawAction,
     SpeechAction,
+    SpeechOrderAction,
     VoteAction,
     WitchPoisonAction,
     WitchSaveAction,
@@ -23,6 +25,7 @@ from aiwerewolf.engine.day import (
     cast_sheriff_vote,
     nominate_for_sheriff,
     resolve_hunter_shoot,
+    transfer_sheriff_badge,
     withdraw_sheriff_candidacy,
     wolf_self_destruct,
 )
@@ -33,6 +36,8 @@ from aiwerewolf.engine.night import (
     resolve_witch,
     resolve_wolf_kill,
 )
+from dataclasses import replace
+
 from aiwerewolf.engine.state import GameState
 from schema.agent import AgentTurnOutput
 
@@ -46,8 +51,8 @@ PHASE_ALLOWED_ACTIONS: dict[Phase, frozenset[str]] = {
     Phase.DAY_SHERIFF: frozenset(
         {"sheriff_run", "sheriff_withdraw", "speech", "vote", "self_destruct", "pass"}
     ),
-    Phase.DAY_ANNOUNCE: frozenset({"speech", "self_destruct", "pass"}),
-    Phase.DAY_SPEECH: frozenset({"speech", "self_destruct", "pass"}),
+    Phase.DAY_ANNOUNCE: frozenset({"speech", "sheriff_transfer", "self_destruct", "pass"}),
+    Phase.DAY_SPEECH: frozenset({"speech", "speech_order", "self_destruct", "pass"}),
     Phase.DAY_VOTE: frozenset({"vote", "self_destruct", "pass"}),
     Phase.DAY_PK: frozenset({"speech", "vote", "self_destruct", "pass"}),
 }
@@ -68,6 +73,10 @@ def validate_phase_action(
     *,
     hunter_can_shoot: bool = False,
     sheriff_election_step: str = "nominate",
+    player_id: int = 0,
+    state_sheriff_id: int | None = None,
+    speech_order_pending: bool = False,
+    sheriff_badge_pending_from: int | None = None,
 ) -> tuple[bool, str]:
     if hunter_can_shoot and role == Role.HUNTER:
         if isinstance(action, HunterShootAction):
@@ -102,6 +111,24 @@ def validate_phase_action(
             if isinstance(action, (VoteAction, SelfDestructAction, PassAction)):
                 return True, ""
             return False, "vote step: 警下 players vote for a candidate"
+    if phase == Phase.DAY_ANNOUNCE and sheriff_badge_pending_from == player_id:
+        if isinstance(
+            action, (SpeechAction, SheriffTransferAction, PassAction)
+        ):
+            return True, ""
+        return False, "pending sheriff: last words and/or sheriff_transfer"
+    if phase == Phase.DAY_ANNOUNCE and isinstance(action, SheriffTransferAction):
+        return False, "only pending sheriff may transfer badge"
+    if phase == Phase.DAY_SPEECH and speech_order_pending:
+        if player_id != state_sheriff_id:
+            if isinstance(action, PassAction):
+                return True, ""
+            return False, "wait for sheriff to set speech order"
+        if isinstance(action, (SpeechOrderAction, PassAction, SelfDestructAction)):
+            return True, ""
+        return False, "sheriff must speech_order (left/right) or pass for default"
+    if phase == Phase.DAY_SPEECH and isinstance(action, SpeechOrderAction):
+        return False, "speech order already set"
     return True, ""
 
 
@@ -120,7 +147,14 @@ def apply_action(state: GameState, output: AgentTurnOutput) -> GameState:
             return resolve_hunter_shoot(state, output.player_id, action.target_id)
 
     ok, reason = validate_phase_action(
-        state.phase, player.role, action, sheriff_election_step=state.sheriff_election_step
+        state.phase,
+        player.role,
+        action,
+        sheriff_election_step=state.sheriff_election_step,
+        player_id=output.player_id,
+        state_sheriff_id=state.sheriff_id,
+        speech_order_pending=state.speech_order_pending,
+        sheriff_badge_pending_from=state.sheriff_badge_pending_from,
     )
     if not ok:
         raise ValueError(reason)
@@ -136,6 +170,14 @@ def apply_action(state: GameState, output: AgentTurnOutput) -> GameState:
 
     if isinstance(action, SpeechAction):
         return state
+
+    if phase == Phase.DAY_SPEECH and isinstance(action, SpeechOrderAction):
+        return replace(
+            state,
+            speech_order_side=action.side,
+            speech_first_speaker_id=action.first_speaker_id,
+            speech_order_pending=False,
+        )
 
     if phase == Phase.NIGHT_WOLF and isinstance(action, WolfKillAction):
         return resolve_wolf_kill(state, action.target_id)
@@ -175,6 +217,11 @@ def apply_action(state: GameState, output: AgentTurnOutput) -> GameState:
             return wolf_self_destruct(
                 state, output.player_id, transfer_to=action.transfer_to
             )
+        if isinstance(action, SheriffTransferAction):
+            pending = state.sheriff_badge_pending_from
+            if pending is None:
+                raise ValueError("no pending sheriff badge to transfer")
+            return transfer_sheriff_badge(state, pending, action.transfer_to)
         return state
 
     if phase in {Phase.DAY_VOTE, Phase.DAY_PK}:

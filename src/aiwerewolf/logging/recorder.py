@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from schema.agent import AgentTurnOutput, SelfDestructAction, VoteAction
+from schema.agent import AgentTurnOutput, SelfDestructAction, SpeechOrderAction, VoteAction
 from schema.enums import Phase, Role
 from schema.events import GameEvent
 
@@ -97,7 +97,13 @@ class Recorder:
             payload={"phase": state.phase.value},
         )
 
-    def record_agent_turn(self, state: GameState, output: AgentTurnOutput) -> None:
+    def record_agent_turn(
+        self,
+        state: GameState,
+        output: AgentTurnOutput,
+        *,
+        count_as_speech: bool = True,
+    ) -> None:
         god_payload = builder.build_agent_turn_god(output, state)
         self._god_turns.append(god_payload)
         self._append(
@@ -107,14 +113,35 @@ class Recorder:
             player_id=output.player_id,
             payload=god_payload,
         )
+        skip_public = (
+            not count_as_speech and isinstance(output.action, SpeechOrderAction)
+        )
         public = builder.build_agent_turn_public(output, state)
-        if public is not None:
+        if public is not None and not skip_public:
             self._append(
                 visibility="public",
                 type="agent_turn",
                 state=state,
                 player_id=output.player_id,
                 payload=public,
+            )
+        if skip_public and isinstance(output.action, SpeechOrderAction):
+            action = output.action
+            self._append(
+                visibility="public",
+                type="speech_order_pick",
+                state=state,
+                player_id=output.player_id,
+                payload={
+                    "sheriff_id": output.player_id,
+                    "side": action.side,
+                    "first_speaker_id": action.first_speaker_id,
+                    "message": (
+                        f"警长指定 P{action.first_speaker_id} 首位发言"
+                        if action.first_speaker_id is not None
+                        else f"警长指定从锚点向{'右' if action.side == 'right' else '左'}发言"
+                    ),
+                },
             )
         self._append(
             visibility=f"private:{output.player_id}",
@@ -290,6 +317,28 @@ class Recorder:
             },
         )
 
+    def record_speech_order_set(
+        self, state: GameState, *, order: list[int]
+    ) -> None:
+        payload = {
+            "order": order,
+            "side": state.speech_order_side,
+            "first_speaker_id": state.speech_first_speaker_id,
+            "message": f"发言顺序: {order}",
+        }
+        self._append(
+            visibility="public",
+            type="speech_order_set",
+            state=state,
+            payload=payload,
+        )
+        self._append(
+            visibility="god_only",
+            type="speech_order_set",
+            state=state,
+            payload=payload,
+        )
+
     def record_sheriff_vote_result(
         self, state: GameState, *, votes: tuple
     ) -> None:
@@ -349,6 +398,24 @@ class Recorder:
             state=state,
             player_id=sid,
             payload={"player_id": sid, "message": payload["message"]},
+        )
+
+    def record_sheriff_badge_transferred(
+        self, state: GameState, *, from_id: int
+    ) -> None:
+        if state.sheriff_id is None:
+            return
+        payload = {
+            "from_id": from_id,
+            "to_id": state.sheriff_id,
+            "message": f"警徽 P{from_id} → P{state.sheriff_id}",
+        }
+        self._append(
+            visibility="public",
+            type="sheriff_badge_transferred",
+            state=state,
+            player_id=state.sheriff_id,
+            payload=payload,
         )
 
     def record_vote_result(

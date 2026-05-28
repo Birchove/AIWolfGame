@@ -17,6 +17,8 @@ from aiwerewolf.protocol.views import PlayerView
 _ACTION_EXAMPLES: dict[str, dict[str, Any]] = {
     "pass": PassAction().model_dump(),
     "speech": {"type": "speech", "speech": "...", "demeanor": ""},
+    "speech_order": {"type": "speech_order", "side": "right", "first_speaker_id": 3},
+    "sheriff_transfer": {"type": "sheriff_transfer", "transfer_to": 1},
     "vote": {"type": "vote", "target_id": 1},
     "sheriff_run": {"type": "sheriff_run"},
     "sheriff_withdraw": {"type": "sheriff_withdraw"},
@@ -97,6 +99,24 @@ def allowed_actions_for_view(view: PlayerView) -> list[dict[str, Any]]:
                 ]
             return [_ACTION_EXAMPLES["pass"]]
 
+    if view.must_transfer_sheriff_badge:
+        return [
+            _ACTION_EXAMPLES["sheriff_transfer"],
+            _ACTION_EXAMPLES["speech"],
+            _ACTION_EXAMPLES["pass"],
+        ]
+
+    if view.must_set_speech_order:
+        return [
+            _ACTION_EXAMPLES["speech_order"],
+            {"type": "speech_order", "side": "left", "first_speaker_id": 1},
+            _ACTION_EXAMPLES["pass"],
+            _ACTION_EXAMPLES["self_destruct"],
+        ]
+
+    if view.phase == Phase.DAY_SPEECH and view.speech_order_pending:
+        return [_ACTION_EXAMPLES["pass"]]
+
     allowed_types = PHASE_ALLOWED_ACTIONS.get(view.phase, frozenset({"pass"}))
     return [_ACTION_EXAMPLES[t] for t in sorted(allowed_types) if t in _ACTION_EXAMPLES]
 
@@ -174,18 +194,34 @@ def format_player_view(view: PlayerView) -> str:
         payload["sheriff_wolf_hint"] = "自爆时 action 须含 transfer_to 指定移徽目标"
     if view.phase == Phase.NIGHT_WOLF and view.own_role == Role.WOLF:
         payload["wolf_night_hint"] = (
-            "先 speech 与队友商议刀口与白天分工，再 wolf_kill 投票。"
+            "先 speech 与队友商议刀口（最多两轮协商），再 wolf_kill 投票。"
             "阅读 wolf_team_speeches，可同意或提出不同方案；"
             "禁止复读队友原话，用你的人格重新表述。"
         )
+    if view.phase == Phase.DAY_ANNOUNCE and view.must_transfer_sheriff_badge:
+        payload["sheriff_transfer_hint"] = (
+            "你已出局且须移交警徽：action=sheriff_transfer，transfer_to 为存活玩家号。"
+            "若有遗言可一并 speech；不可传给死者。"
+        )
+    elif view.phase == Phase.DAY_ANNOUNCE and view.may_give_last_words:
+        payload["last_words_hint"] = "你已出局：发表遗言（action=speech），然后结束。"
     if view.phase in {Phase.DAY_SPEECH, Phase.DAY_PK}:
-        recent = view.public_speeches[-2:]
-        if recent:
-            ids = ", ".join(str(s.player_id) for s in recent)
-            payload["day_speech_hint"] = (
-                f"前几位发言者：{ids}。"
-                "不要简单附和「我同意X号」；用你的人格提出独立判断或追问。"
+        if view.must_set_speech_order:
+            payload["speech_order_hint"] = (
+                "你是警长：本回合仅指定发言顺序，不算正式发言。"
+                "action=speech_order，必填 first_speaker_id（首位发言的存活玩家号）。"
+                "side=right 从该玩家顺时针，side=left 逆时针。"
+                "根据你的判断选择：让可信好人先聊、让可疑目标先聊、或控制信息流向。"
+                "定序完成后才进入正式发言轮。"
             )
+        elif not view.speech_order_pending:
+            recent = view.public_speeches[-2:]
+            if recent:
+                ids = ", ".join(str(s.player_id) for s in recent)
+                payload["day_speech_hint"] = (
+                    f"前几位发言者：{ids}。"
+                    "不要简单附和「我同意X号」；用你的人格提出独立判断或追问。"
+                )
     payload["diversity_hint"] = (
         "你的 speech 须体现本局人格，避免与其他玩家雷同；"
         "不要套用攻略模板句。"

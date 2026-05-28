@@ -8,6 +8,9 @@ interface Props {
 }
 
 export function RoundTable({ state, showRoles }: Props) {
+  const inSheriffElection =
+    state.sheriffElectionStep != null && state.sheriffId == null;
+
   return (
     <div className="round-table">
       {ALL_PLAYER_IDS.map((id, index) => {
@@ -24,8 +27,12 @@ export function RoundTable({ state, showRoles }: Props) {
               playerId={id}
               alive={state.alive.has(id)}
               isSheriff={state.sheriffId === id}
-              isSheriffCandidate={state.sheriffCandidates.has(id)}
-              isSheriffWithdrawn={state.sheriffWithdrawn.has(id)}
+              isSheriffCandidate={
+                inSheriffElection && state.sheriffCandidates.has(id)
+              }
+              isSheriffWithdrawn={
+                inSheriffElection && state.sheriffWithdrawn.has(id)
+              }
               role={showRoles ? state.roles?.[id] : undefined}
               speech={state.speeches[id]}
               demeanorEmojis={state.demeanorEmojis[id]}
@@ -47,9 +54,14 @@ export function RoundTable({ state, showRoles }: Props) {
             {state.sheriffElectionStep === "vote" && "警下投票"}
           </div>
         )}
-        {state.sheriffCandidates.size > 0 && !state.sheriffId && (
+        {inSheriffElection && state.sheriffCandidates.size > 0 && (
           <div className="sheriff-candidates">
             警上: {[...state.sheriffCandidates].sort((a, b) => a - b).join(", ")}
+          </div>
+        )}
+        {state.speechOrder.length > 0 && state.phase === "day_speech" && (
+          <div className="speech-order-banner">
+            发言序: {state.speechOrder.join(" → ")}
           </div>
         )}
         {state.sheriffId != null && (

@@ -100,10 +100,7 @@ def confirm_idiot(state: GameState) -> GameState:
 
 
 def collect_death_announcements(state: GameState) -> GameState:
-    dead_ids = tuple(
-        sorted(p.player_id for p in state.players if not p.alive)
-    )
-    return replace(state, death_announcements=dead_ids)
+    return replace(state, death_announcements=state.pending_death_announcements)
 
 
 def resolve_night(
