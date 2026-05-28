@@ -218,7 +218,7 @@ cd frontend
 npm run dev
 ```
 
-打开 **http://localhost:5173**（Vite 代理 API/WebSocket 到 8000）。
+打开 **http://localhost:5173** （Vite 代理 API/WebSocket 到 8000）。
 
 **命令行跑局（无浏览器）**
 
